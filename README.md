@@ -120,3 +120,33 @@ ukubona-core/
 │   └── vite.config.ts
 └── docker-compose.yml
 ```
+
+---
+
+Now I have the full picture. You want **option B** — end-to-end, runnable — and the philosophical mapping tells me exactly what the UI should feel like.
+
+Let me build it.Now I'll generate the complete artifact — backend files + a React demo that you can run locally.Now the frontend — Ukubona house aesthetic, fully wired to the backend:21 files. Here's what you have and what each one does:
+
+**To run it:**
+```bash
+tar xzf ukubona-core.tar.gz
+cd ukubona-core
+docker compose up --build
+# → frontend: localhost:5173  backend: localhost:8000/docs
+```
+
+---
+
+**The architecture, file by file:**
+
+`schema.sql` — the ontology. Three tables, four RLS policies, an audit trigger. The `ALTER DATABASE SET app.* = ''` guards ensure a bare connection without context gets blocked, not silently passed through.
+
+`dependencies.py` — the hinge. This is the one file that matters most. `get_db()` takes `user: dict = Depends(get_current_user)` and immediately fires `SET LOCAL app.*` before yielding the session. `SET LOCAL` (not `SET`) is deliberate — it resets at transaction end, so pooled connections can't leak one user's context into another request.
+
+`records.py` — the proof. Not a single `WHERE tenant_id = ...` in the route handlers. `SELECT * FROM records` returns only what RLS permits for the current session context. The database is the final authority.
+
+`App.tsx` — three demo users, two tenants. Login as NPA Admin, create records, logout. Login as Strata Stone Admin, fetch records — zero rows. No frontend filtering involved.
+
+---
+
+**The one thing to change before production:** `SECRET_KEY` in `security.py` — pull it from an environment variable. Everything else is structurally sound for a real deployment.
